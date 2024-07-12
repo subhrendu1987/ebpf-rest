@@ -18,24 +18,24 @@ MODULE_VERSION("0.1");
 //#define SERVER_ADDR "127.0.0.1"
 #define SERVER_ADDR 0x100007f
 
-static int __init http_post_init(void) {
-    struct socket *sock;
-    struct sockaddr_in server;
-    char *request;
-    int ret;
-    unsigned char addr[4];
+struct socket *sock;
+char *request;
 
-    // Allocate memory for the request
+static int __init http_post_init(void) {
+    struct sockaddr_in server;
+    int ret;
+
+    printk(KERN_INFO "// Allocate memory for the request\n");
     request = kmalloc(256, GFP_KERNEL);
     if (!request) {
         printk(KERN_ERR "Failed to allocate memory for request\n");
         return -ENOMEM;
     }
 
-    // Create HTTP POST request
+    printk(KERN_INFO "// Create HTTP POST request\n");
     snprintf(request, 256,
              "POST / HTTP/1.1\r\n"
-             "Host: %s:%d\r\n"
+             "Host: %X:%d\r\n"
              "Content-Type: application/json\r\n"
              "Content-Length: %d\r\n"
              "\r\n"
@@ -93,6 +93,9 @@ static int __init http_post_init(void) {
 
 static void __exit http_post_exit(void) {
     printk(KERN_INFO "HTTP POST module exiting\n");
+    sock_release(sock);
+    kfree(request);
 }
 
 module_init(http_post_init);
+module_exit(http_post_exit);
