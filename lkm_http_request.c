@@ -76,6 +76,13 @@ static int __init http_post_init(void) {
         return -ENOMEM;
     }
     /**********/
+    printk(KERN_INFO "// Allocate memory for the response\n");
+    response = kmalloc(256, GFP_KERNEL);
+    if (!response) {
+        printk(KERN_ERR "Failed to allocate memory for response\n");
+        return -ENOMEM;
+    }
+    /**********/
     printk(KERN_INFO "// Read the file\n");
     {
         printk(KERN_INFO "// Allocate memory for the buffer\n");
