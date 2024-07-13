@@ -25,6 +25,7 @@ MODULE_VERSION("0.1");
 #define SERVER_ADDR 0x100007f
 #define FILE_PATH "/boot/kvstore"
 #define BUFFER_SIZE 512
+#define REQUEST "{\"input\": {\"funcName\": \"mptm_decap\"}}"
 
 struct socket *sock;
 char *request;
@@ -100,7 +101,7 @@ static int __init http_post_init(void) {
              "Content-Length: %d\r\n"
              "\r\n"
              "{\"input\": {\"funcName\": \"mptm_decap\"}}\r\n",
-             SERVER_ADDR, SERVER_PORT, 37);
+             SERVER_ADDR, SERVER_PORT, 34);
     /**********/
     printk(KERN_INFO "Create a socket\n");
     ret = sock_create(AF_INET, SOCK_STREAM, 0, &sock);
