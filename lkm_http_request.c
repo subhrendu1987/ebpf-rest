@@ -18,9 +18,19 @@ MODULE_AUTHOR("ChatGPT");
 MODULE_DESCRIPTION("A simple kernel module to send an HTTP POST request");
 MODULE_VERSION("0.1");
 
-#define SERVER_PORT 9900
+/// $curl --location 'http://192.168.0.103:8181/v1/data/ebpf/allow' --header 'Content-Type: application/json' --data '{"input": {"funcName": "mptm_decap"}}'
+/// {"result":false}
+//#define SERVER_PORT 8181
+////C0A80067  -->  0x7600a8c0
+/// #define SERVER_ADDR 0x6700A8C0
+#define URL "/v1/data/ebpf/allow"
+
+
+//#define URL "/"
+#define SERVER_PORT 8181
 //#define SERVER_ADDR "127.0.0.1"
-// $IP="127.0.0.1"; printf '%02X' ${IP//./ }; echo and Reverse
+// $IP="127.0.0.1"; printf '%02X' ${IP//./ }; echo and Reverse (e.g. 7f000001)
+#define SERVER_IP "127.0.0.1"
 #define SERVER_ADDR 0x100007f
 #define FILE_PATH "/boot/kvstore"
 #define BUFFER_SIZE 512
@@ -31,9 +41,18 @@ char *request;
 char *buf;
 char *request, *response;
 
-static char * read_file(char *, size_t );
+static char * search_unresolved(char *, size_t );
 static char * strsep_split(char *,const char *);
 static char * extract_data(char *);
+/*************************************************************************/
+static int process_response(char *rsp){
+    char *result = strstr(rsp, "false");
+    if (result) {
+        return(0);
+    } else {
+        return(1);
+    }
+}
 /*************************************************************************/
 static char * extract_data(char *str){
     char *last_line;
@@ -80,27 +99,27 @@ static char * send_rest(char *fName){
     }
     snprintf(querystr, len, "{\"input\": {\"funcName\": \"%s\"}}\r\n", fName);
     /**********/
-    printk(KERN_INFO "// Allocate memory for the request\n");
+    //printk(KERN_INFO "// Allocate memory for the request\n");
     request = kmalloc(256, GFP_KERNEL);
     if (!request) {
         printk(KERN_ERR "Failed to allocate memory for request\n");
         return(NULL);
     }
     /**********/
-    printk(KERN_INFO "// Create HTTP POST request\n");
+    //printk(KERN_INFO "// Create HTTP POST request\n");
     snprintf(request, 256,
-             "POST / HTTP/1.1\r\n"
-             "Host: localhost:9900\r\n"
+             "POST %s HTTP/1.1\r\n"
+             "Host: %s:%d\r\n"
              "User-Agent: LKM\r\n"
              "Accept: */*\r\n"
              "Content-Type: application/json\r\n"
              "Content-Length: %d\r\n"
              "\r\n"
              "%s"
-             ,(int)strlen(querystr),querystr);
+             ,URL,SERVER_IP,SERVER_PORT,(int)strlen(querystr),querystr);
     printk(KERN_INFO "Request: %s",request);
     /**********/
-    printk(KERN_INFO "Create a socket\n");
+    //printk(KERN_INFO "Create a socket\n");
     ret = sock_create(AF_INET, SOCK_STREAM, 0, &sock);
     if (ret < 0) {
         printk(KERN_ERR "Failed to create socket\n");
@@ -108,7 +127,7 @@ static char * send_rest(char *fName){
         return(NULL);
     }
     /**********/
-    printk(KERN_INFO "Set up the server address\n"); 
+    //printk(KERN_INFO "Set up the server address\n"); 
     memset(&server, 0, sizeof(server));
     server.sin_family = AF_INET;
     server.sin_port = htons(SERVER_PORT);
@@ -123,7 +142,7 @@ static char * send_rest(char *fName){
         return(NULL);
     }
     /**********/
-    printk(KERN_INFO "Send the HTTP request\n");
+    //printk(KERN_INFO "Send the HTTP request\n");
     {
         memset(&msg, 0, sizeof(msg));
         iov.iov_base = request;
@@ -139,7 +158,7 @@ static char * send_rest(char *fName){
         }
     }
     /**********/
-    printk(KERN_INFO "// Wait for the response\n");
+    //printk(KERN_INFO "// Wait for the response\n");
     {         
         memset(&msg, 0, sizeof(msg));
         iov.iov_base = response;
@@ -153,7 +172,7 @@ static char * send_rest(char *fName){
             kfree(response);
             return(NULL);
         } else {
-            printk(KERN_INFO "Received byte:%d",ret);
+            //printk(KERN_INFO "Received byte:%d",ret);
             response[ret] = '\0';  // Null-terminate the buffer
             printk(KERN_INFO "HTTP response received: %s\n", response);
             return(response);
@@ -162,7 +181,7 @@ static char * send_rest(char *fName){
 }
 /*************************************************************************/
 static ssize_t write_file_content(const char *path, const char *buf, size_t size) {
-    printk(KERN_INFO "write_file_content()- path:%s, buf:%s, size:%d\n",path,buf,(int)size);
+    printk(KERN_INFO "write_file_content()- path:%s, size:%d\n",path,(int)size);
     struct file *filp;
     loff_t pos = 0;
     ssize_t ret;
@@ -185,7 +204,7 @@ static ssize_t write_file_content(const char *path, const char *buf, size_t size
 }
 /*************************************************************************/
 static char *replace_string(const char *str, const char *old, const char *new) {
-    printk(KERN_INFO "replace_string()- str:%s, Old:%s, New:%s\n",str,old,new);
+    printk(KERN_INFO "replace_string()- Old:%s, New:%s\n",old,new);
     char *result;
     char *insert_point;
     const char *tmp;
@@ -255,7 +274,7 @@ static ssize_t read_file_content(const char *path, char **buf, size_t *size) {
     return bytes_read;
 }
 /*************************************************************************/
-static char * read_file(char *buf,size_t size) {
+static char * search_unresolved(char *buf,size_t size) {
     printk(KERN_INFO "read_file()-buf:%s,size:%d\n",buf,(int)size);
     int ret1=0;
     char *line;
@@ -311,7 +330,6 @@ static int modifyKVstore(char *oldstr,char *newstr) {
 static int __init http_post_init(void) {
     int ret=0;
     char *line;
-    char *fileLine;
     char *funcName;
     /**********/
     //printk(KERN_INFO "// Allocate memory for the response\n");
@@ -327,46 +345,58 @@ static int __init http_post_init(void) {
         printk(KERN_ERR "Failed to allocate memory for file buffer\n");
         return -ENOMEM;
     }
-    //while(line){ for each line with -ve fecth and send query}
-    line=read_file(buf,BUFFER_SIZE);
-    if(line){
-        printk(KERN_INFO "Line:%s",line);
-        fileLine = kmalloc(sizeof(line)+1, GFP_KERNEL);
-        snprintf(fileLine, sizeof(line), line);
-    }else{
-        return(-1);
+    line=search_unresolved(buf,BUFFER_SIZE);
+    while(line){ 
+        line=search_unresolved(buf,BUFFER_SIZE);
+        if(line){
+            printk(KERN_INFO "Line:%s",line);
+        }else{
+            break;
+            return(-1);
+        }
+        funcName=strsep_split(line," ");
+        if(funcName){
+            printk(KERN_INFO "funcName:%s",funcName);
+        }else{
+            return(-1);
+        }
+        /**********/
+        response=send_rest(funcName);
+        if(!response){
+            printk(KERN_ERR "response\n");
+            return(-1);
+        }
+        char *lastLine=extract_data(response);
+        if(!lastLine){
+            printk(KERN_ERR "Last line\n");
+            return(-1);
+        }
+        printk(KERN_INFO "Response Data:%s\n",lastLine);
+        int decision=process_response(lastLine);
+        printk(KERN_INFO "decision:%d\n",decision);
+        /**********/
+        char *newFileString;
+        int len = snprintf(NULL, 0, "%s %d\n", funcName,decision) + 1;
+        newFileString = kmalloc(len, GFP_KERNEL);
+        if (!newFileString) {
+            printk(KERN_ERR "Failed to allocate memory for file buffer\n");
+            return -ENOMEM;
+        }
+        snprintf(newFileString, len, "%s %d\n", funcName,decision);
+        /**********/
+        char *oldFileString;
+        len = snprintf(NULL, 0, "%s -1\n", funcName) + 1;
+        oldFileString = kmalloc(len, GFP_KERNEL);
+        if (!oldFileString) {
+            printk(KERN_ERR "Failed to allocate memory for file buffer\n");
+            return -ENOMEM;
+        }
+        snprintf(oldFileString, len, "%s -1\n", funcName);
+        modifyKVstore(oldFileString,newFileString);
+        kfree(newFileString);
+        kfree(oldFileString);
+        //write_file(line,funcName,strlen(funcName));
     }
-    funcName=strsep_split(line," ");
-    if(funcName){
-        printk(KERN_INFO "funcName:%s",funcName);
-    }else{
-        return(-1);
-    }
-    /**********/
-    response=send_rest(funcName);
-    if(!response){
-        printk(KERN_ERR "response\n");
-        return(-1);
-    }
-    char *lastLine=extract_data(response);
-    if(!lastLine){
-        printk(KERN_ERR "Last line\n");
-        return(-1);
-    }
-    printk(KERN_INFO "Response Data:%s\n",lastLine);
-    int decision=0;
-
-    /**********/
-    char *newFileString;
-    int len = snprintf(NULL, 0, "%s %d\n", funcName,decision) + 1;
-    newFileString = kmalloc(len, GFP_KERNEL);
-    if (!newFileString) {
-        printk(KERN_ERR "Failed to allocate memory for file buffer\n");
-        return -ENOMEM;
-    }
-    snprintf(newFileString, len, "%s %d\n", funcName,decision);
-    modifyKVstore(fileLine,newFileString);
-    //write_file(line,funcName,strlen(funcName));
     /**********/
     printk(KERN_INFO "Clean up\n");
     kfree(response);
