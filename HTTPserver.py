@@ -4,7 +4,9 @@ import json
 class RequestHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         content_length = int(self.headers['Content-Length'])
+        print("content length:",content_length)
         post_data = self.rfile.read(content_length)
+        print("POST MSG:",post_data)
         data = json.loads(post_data)
         print("Received POST request")
         print("Headers:", self.headers)

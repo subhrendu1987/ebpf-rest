@@ -13,7 +13,6 @@
 #include <asm/uaccess.h>
 #include <linux/buffer_head.h>
 
-
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("ChatGPT");
 MODULE_DESCRIPTION("A simple kernel module to send an HTTP POST request");
@@ -32,70 +31,60 @@ char *request;
 char *buf;
 char *request, *response;
 
+static char * read_file(char *, size_t );
+static char * strsep_split(char *,const char *);
+static char * extract_data(char *);
 /*************************************************************************/
-static int read_file(const char *path, char *buf, size_t size) {
-    struct file *file;
-    loff_t pos = 0;
-    int bytes_read;
-    struct msghdr msg;
-    struct kvec iov;
+static char * extract_data(char *str){
+    char *last_line;
+    char *newline;
+    printk(KERN_INFO "Original string: %s\n", str);
 
-    // Open the file
-    file = filp_open(path, O_RDONLY, 0);
-    if (IS_ERR(file)) {
-        printk(KERN_ERR "Failed to open file: %s\n", path);
-        return PTR_ERR(file);
+    // Find the last newline character
+    newline = strrchr(str, '\n');
+    if (newline && *(newline + 1) != '\0') {
+        // Extract the substring after the last newline
+        last_line = newline + 1;
+        printk(KERN_INFO "Last line: %s\n", last_line);
+    } else {
+        printk(KERN_ERR "No newline found or no content after the last newline\n");
+        return(NULL);
     }
 
-    // Read the file
-    bytes_read = kernel_read(file, buf, size - 1, &pos);
-    if (bytes_read < 0) {
-        printk(KERN_ERR "Failed to read file: %s\n", path);
-        filp_close(file, NULL);
-        return bytes_read;
-    }
-
-    buf[bytes_read] = '\0';  // Null-terminate the buffer
-
-    // Close the file
-    filp_close(file, NULL);
-
-    return bytes_read;
+    return(newline); // Non-zero return means that the module couldn't be loaded.
 }
 /*************************************************************************/
-static int __init http_post_init(void) {
+static char * strsep_split(char * line, const char * delim){
+    char *token;
+    char *rest = line;
+    printk(KERN_INFO "Original line: %s\n", line);
+    // Tokenize the string using space as delimiter
+    while ((token = strsep(&rest, delim)) != NULL) {
+        printk(KERN_INFO "Token: %s\n", token);
+        return(token);
+    }
+    return(NULL); // Non-zero return means that the module couldn't be loaded.
+}
+/*************************************************************************/
+static char * send_rest(char *fName){
     struct sockaddr_in server;
-    int ret;
+    int ret=0;
     struct kvec iov;
     struct msghdr msg;
+    char *querystr;
+    int len = snprintf(NULL, 0, "{\"input\": {\"funcName\": \"%s\"}}\r\n", fName) + 1;
+    querystr = kmalloc(256, GFP_KERNEL);
+    if (!querystr) {
+        printk(KERN_ERR "Failed to allocate memory for query string\n");
+        return(NULL);
+    }
+    snprintf(querystr, len, "{\"input\": {\"funcName\": \"%s\"}}\r\n", fName);
     /**********/
     printk(KERN_INFO "// Allocate memory for the request\n");
     request = kmalloc(256, GFP_KERNEL);
     if (!request) {
         printk(KERN_ERR "Failed to allocate memory for request\n");
-        return -ENOMEM;
-    }
-    /**********/
-    printk(KERN_INFO "// Allocate memory for the response\n");
-    response = kmalloc(256, GFP_KERNEL);
-    if (!response) {
-        printk(KERN_ERR "Failed to allocate memory for response\n");
-        return -ENOMEM;
-    }
-    /**********/
-    printk(KERN_INFO "// Read the file\n");
-    {
-        printk(KERN_INFO "// Allocate memory for the buffer\n");
-        buf = kmalloc(BUFFER_SIZE, GFP_KERNEL);
-        if (!buf) {
-            printk(KERN_ERR "Failed to allocate memory for buffer\n");
-            return -ENOMEM;
-        }
-        printk(KERN_INFO "// Read the file\n");
-        ret = read_file(FILE_PATH, buf, BUFFER_SIZE);
-        if (ret >= 0) {
-            printk(KERN_INFO "Read from %s:\n%s\n", FILE_PATH, buf);
-        }
+        return(NULL);
     }
     /**********/
     printk(KERN_INFO "// Create HTTP POST request\n");
@@ -107,15 +96,16 @@ static int __init http_post_init(void) {
              "Content-Type: application/json\r\n"
              "Content-Length: %d\r\n"
              "\r\n"
-             "{\"input\": {\"funcName\": \"mptm_decap\"}}\r\n",
-             SERVER_ADDR, SERVER_PORT, 34);
+             "%s"
+             ,(int)strlen(querystr),querystr);
+    printk(KERN_INFO "Request: %s",request);
     /**********/
     printk(KERN_INFO "Create a socket\n");
     ret = sock_create(AF_INET, SOCK_STREAM, 0, &sock);
     if (ret < 0) {
         printk(KERN_ERR "Failed to create socket\n");
         kfree(request);
-        return ret;
+        return(NULL);
     }
     /**********/
     printk(KERN_INFO "Set up the server address\n"); 
@@ -130,7 +120,7 @@ static int __init http_post_init(void) {
         printk(KERN_ERR "Failed to connect to server\n");
         sock_release(sock);
         kfree(request);
-        return ret;
+        return(NULL);
     }
     /**********/
     printk(KERN_INFO "Send the HTTP request\n");
@@ -144,8 +134,6 @@ static int __init http_post_init(void) {
             printk(KERN_ERR "Failed to send HTTP request\n");
             sock_release(sock);
             kfree(request);
-            kfree(buf);
-            return ret;
         } else {
             printk(KERN_INFO "HTTP request sent successfully\n");
         }
@@ -163,17 +151,184 @@ static int __init http_post_init(void) {
             sock_release(sock);
             kfree(request);
             kfree(response);
-            kfree(buf);
-            return ret;
+            return(NULL);
         } else {
+            printk(KERN_INFO "Received byte:%d",ret);
             response[ret] = '\0';  // Null-terminate the buffer
             printk(KERN_INFO "HTTP response received: %s\n", response);
+            return(response);
         }
     }
+}
+/*************************************************************************/
+static ssize_t write_file_content(const char *path, const char *buf, size_t size) {
+    printk(KERN_INFO "write_file_content()- path:%s, buf:%s, size:%d\n",path,buf,(int)size);
+    struct file *filp;
+    loff_t pos = 0;
+    ssize_t ret;
+
+    filp = filp_open(path, O_WRONLY | O_TRUNC, 0);
+    if (IS_ERR(filp)) {
+        printk(KERN_ERR "Failed to open file: %ld\n", PTR_ERR(filp));
+        return PTR_ERR(filp);
+    }
+
+    ret = kernel_write(filp, buf, size, &pos);
+    if (ret < 0) {
+        printk(KERN_ERR "Failed to write file: %zd\n", ret);
+        filp_close(filp, NULL);
+        return ret;
+    }
+
+    filp_close(filp, NULL);
+    return 0;
+}
+/*************************************************************************/
+static char *replace_string(const char *str, const char *old, const char *new) {
+    printk(KERN_INFO "replace_string()- str:%s, Old:%s, New:%s\n",str,old,new);
+    char *result;
+    char *insert_point;
+    const char *tmp;
+    size_t old_len, new_len, count;
+    
+    old_len = strlen(old);
+    new_len = strlen(new);
+
+    // Count the number of replacements needed
+    for (count = 0, tmp = str; (tmp = strstr(tmp, old)); ++tmp) {
+        count++;
+    }
+
+    result = kmalloc(strlen(str) + (new_len - old_len) * count + 1, GFP_KERNEL);
+    if (!result) {
+        printk(KERN_ERR "Failed to allocate memory for result string\n");
+        return NULL;
+    }
+
+    tmp = str;
+    insert_point = result;
+    while (count--) {
+        const char *p = strstr(tmp, old);
+        size_t len = p - tmp;
+        memcpy(insert_point, tmp, len);
+        insert_point += len;
+        memcpy(insert_point, new, new_len);
+        insert_point += new_len;
+        tmp = p + old_len;
+    }
+    strcpy(insert_point, tmp);
+    
+    return result;
+}
+/*************************************************************************/
+static ssize_t read_file_content(const char *path, char **buf, size_t *size) {
+    printk(KERN_INFO "read_file_content()- path:%s\n",path);
+    struct file *file;
+    loff_t pos = 0;
+    int bytes_read;
+    *buf = kmalloc(*size + 1, GFP_KERNEL);
+    if (!*buf) {
+        printk(KERN_ERR "Failed to allocate memory\n");
+        filp_close(file, NULL);
+        return -ENOMEM;
+    }
+
+    // Open the file
+    file = filp_open(path, O_RDONLY, 0);
+    if (IS_ERR(file)) {
+        printk(KERN_ERR "Failed to open file: %s\n", path);
+        return PTR_ERR(file);
+    }
+
+    // Read the file
+    bytes_read = kernel_read(file, *buf, *size - 1, &pos);
+    if (bytes_read < 0) {
+        printk(KERN_ERR "Failed to read file: %s\n", path);
+        filp_close(file, NULL);
+        return bytes_read;
+    }
+    (*buf)[bytes_read] = '\0';  // Null-terminate the buffer
+
+    // Close the file
+    filp_close(file, NULL);
+
+    return bytes_read;
+}
+/*************************************************************************/
+static char * read_file(char *buf,size_t size) {
+    printk(KERN_INFO "read_file()-buf:%s,size:%d\n",buf,(int)size);
+    int ret1=0;
+    char *line;
+    ret1 = read_file_content(FILE_PATH, &buf, &size);
+    if (ret1 < 0) {
+        return(NULL);
+    }else{
+        printk(KERN_INFO "Read Size:%d\n",(int)ret1);
+    }
+    char *rest = buf;
+    buf[ret1] = '\0';  // Null-terminate the buffer
+    // Find -ve entry
+    const char delimiter[] = "\n";
+    // Tokenize the string using newline as delimiter
+    while ((line = strsep(&rest, delimiter)) != NULL) {
+        // Check if the line contains "-1"
+        if (strstr(line, "-1") != NULL) {
+            //printk(KERN_INFO "Line with -1: %s\n", line);
+            return line;
+        }
+    }
+    return (NULL);
+}
+/*************************************************************************/
+//static char * replace_file(char *buf,size_t size) {}
+/*************************************************************************/
+static int __init http_post_init(void) {
+    int ret=0;
+    char *line;
+    char *funcName;
+    /**********/
+    //printk(KERN_INFO "// Allocate memory for the response\n");
+    response = kmalloc(256, GFP_KERNEL);
+    if (!response) {
+        printk(KERN_ERR "Failed to allocate memory for response\n");
+        return -ENOMEM;
+    }
+    /**********/
+    //printk(KERN_INFO "// Allocate memory for the file buffer\n");
+    buf = kmalloc(BUFFER_SIZE, GFP_KERNEL);
+    if (!buf) {
+        printk(KERN_ERR "Failed to allocate memory for file buffer\n");
+        return -ENOMEM;
+    }
+    //while(line){ for each line with -ve fecth and send query}
+    line=read_file(buf,BUFFER_SIZE);
+    if(line){
+        printk(KERN_INFO "Line:%s",line);
+    }else{
+        return(-1);
+    }
+    funcName=strsep_split(line," ");
+    if(funcName){
+        printk(KERN_INFO "funcName:%s",funcName);
+    }else{
+        return(-1);
+    }
+    /**********/
+    response=send_rest(funcName);
+    if(!response){
+        printk(KERN_ERR "response\n");
+        return(-1);
+    }
+    char *lastLine=extract_data(response);
+    if(!lastLine){
+        printk(KERN_ERR "Last line\n");
+        return(-1);
+    }
+    printk(KERN_INFO "Response Data:%s\n",lastLine);
+    int decision=0;
+    //write_file(line,funcName,strlen(funcName));
     /**********/
     printk(KERN_INFO "Clean up\n");
-    sock_release(sock);
-    kfree(request);
     kfree(response);
     kfree(buf);
     return ret;
@@ -181,8 +336,8 @@ static int __init http_post_init(void) {
 /*************************************************************************/
 static void __exit http_post_exit(void) {
     printk(KERN_INFO "HTTP POST module exiting\n");
-    sock_release(sock);
-    kfree(request);
+    //sock_release(sock);
+    //kfree(request);
 }
 /*************************************************************************/
 module_init(http_post_init);
