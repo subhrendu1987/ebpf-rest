@@ -311,6 +311,7 @@ static int modifyKVstore(char *oldstr,char *newstr) {
 static int __init http_post_init(void) {
     int ret=0;
     char *line;
+    char *fileLine;
     char *funcName;
     /**********/
     //printk(KERN_INFO "// Allocate memory for the response\n");
@@ -330,6 +331,8 @@ static int __init http_post_init(void) {
     line=read_file(buf,BUFFER_SIZE);
     if(line){
         printk(KERN_INFO "Line:%s",line);
+        fileLine = kmalloc(sizeof(line)+1, GFP_KERNEL);
+        snprintf(fileLine, sizeof(line), line);
     }else{
         return(-1);
     }
@@ -362,7 +365,7 @@ static int __init http_post_init(void) {
         return -ENOMEM;
     }
     snprintf(newFileString, len, "%s %d\n", funcName,decision);
-    modifyKVstore(line,newFileString);
+    modifyKVstore(fileLine,newFileString);
     //write_file(line,funcName,strlen(funcName));
     /**********/
     printk(KERN_INFO "Clean up\n");
