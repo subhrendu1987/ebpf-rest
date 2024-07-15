@@ -38,14 +38,14 @@ static char * extract_data(char *);
 static char * extract_data(char *str){
     char *last_line;
     char *newline;
-    printk(KERN_INFO "Original string: %s\n", str);
+    //printk(KERN_INFO "Original string: %s\n", str);
 
     // Find the last newline character
     newline = strrchr(str, '\n');
     if (newline && *(newline + 1) != '\0') {
         // Extract the substring after the last newline
         last_line = newline + 1;
-        printk(KERN_INFO "Last line: %s\n", last_line);
+        //printk(KERN_INFO "Last line: %s\n", last_line);
     } else {
         printk(KERN_ERR "No newline found or no content after the last newline\n");
         return(NULL);
@@ -57,10 +57,10 @@ static char * extract_data(char *str){
 static char * strsep_split(char * line, const char * delim){
     char *token;
     char *rest = line;
-    printk(KERN_INFO "Original line: %s\n", line);
+    //printk(KERN_INFO "Original line: %s\n", line);
     // Tokenize the string using space as delimiter
     while ((token = strsep(&rest, delim)) != NULL) {
-        printk(KERN_INFO "Token: %s\n", token);
+        //printk(KERN_INFO "Token: %s\n", token);
         return(token);
     }
     return(NULL); // Non-zero return means that the module couldn't be loaded.
@@ -280,7 +280,33 @@ static char * read_file(char *buf,size_t size) {
     return (NULL);
 }
 /*************************************************************************/
-//static char * replace_file(char *buf,size_t size) {}
+static int modifyKVstore(char *oldstr,char *newstr) {
+    printk(KERN_INFO "modifyKVstore()- oldstr:%s, newstr:%s)\n",oldstr,newstr);
+    int ret3;
+    char *buf;
+    size_t size=BUFFER_SIZE;
+    buf = kmalloc(BUFFER_SIZE, GFP_KERNEL);
+    if (!buf) {
+        printk(KERN_ERR "Failed to allocate memory for file buffer\n");
+        return -ENOMEM;
+    }
+    
+    ret3 = read_file_content(FILE_PATH, &buf, &size);
+    if (ret3 < 0) {
+        return ret3;
+    }
+
+    char *modified_buf = replace_string(buf, oldstr, newstr);
+    if (!modified_buf) {
+        kfree(buf);
+        return -ENOMEM;
+    }
+
+    ret3 = write_file_content(FILE_PATH, modified_buf, strlen(modified_buf));
+    kfree(buf);
+    kfree(modified_buf);
+    return(ret3);
+}
 /*************************************************************************/
 static int __init http_post_init(void) {
     int ret=0;
@@ -326,6 +352,17 @@ static int __init http_post_init(void) {
     }
     printk(KERN_INFO "Response Data:%s\n",lastLine);
     int decision=0;
+
+    /**********/
+    char *newFileString;
+    int len = snprintf(NULL, 0, "%s %d\n", funcName,decision) + 1;
+    newFileString = kmalloc(len, GFP_KERNEL);
+    if (!newFileString) {
+        printk(KERN_ERR "Failed to allocate memory for file buffer\n");
+        return -ENOMEM;
+    }
+    snprintf(newFileString, len, "%s %d\n", funcName,decision);
+    modifyKVstore(line,newFileString);
     //write_file(line,funcName,strlen(funcName));
     /**********/
     printk(KERN_INFO "Clean up\n");
