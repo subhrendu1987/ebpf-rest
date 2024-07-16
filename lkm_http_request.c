@@ -9,30 +9,6 @@ MODULE_AUTHOR("Subhrendu");
 MODULE_DESCRIPTION("LKM for Policy Fetcher");
 MODULE_VERSION("0.1");
 
-#define URL "/v1/data/ebpf/allow"
-#define SERVER_PORT 8181
-
-/// $curl --location 'http://192.168.0.103:8181/v1/data/ebpf/allow' --header 'Content-Type: application/json' --data '{"input": {"funcName": "mptm_encap"}}'
-/// {"result":true}
-
-//#define SERVER_PORT 8181
-////$IP="192.168.0.103"; printf '%02X' ${IP//./ }| sed 's/../& /g' | awk 'BEGIN {printf "0x"} {for(i=NF;i>=1;i--) printf "%s", $i} END {print ""}'
-/// #define SERVER_ADDR 0x6700A8C0
-#define SERVER_IP "192.168.0.103"
-#define SERVER_ADDR 0x6700A8C0
-
-
-/// $curl --location 'http://127.0.0.1:8181/v1/data/ebpf/allow' --header 'Content-Type: application/json' --data '{"input": {"funcName": "mptm_decap"}}'
-/// {"result":false}
-//#define SERVER_ADDR "127.0.0.1"
-// $IP="127.0.0.1"; printf '%02X' ${IP//./ }| sed 's/../& /g' | awk 'BEGIN {printf "0x"} {for(i=NF;i>=1;i--) printf "%s", $i} END {print ""}'
-
-//#define SERVER_IP "127.0.0.1"
-//#define SERVER_ADDR 0x100007f
-
-#define FILE_PATH "/boot/kvstore"
-#define BUFFER_SIZE 512
-
 struct socket *sock;
 char *request;
 char *buf;
