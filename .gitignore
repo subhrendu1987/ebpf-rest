@@ -1,0 +1,19 @@
+# Ignore object files, shared libraries, executables
+*.o
+*.ko
+*.mod
+*.mod.c
+*.symvers
+*.order
+*.cmd
+.tmp_versions/
+
+# Ignore editor backup files
+*~
+*.swp
+*.bak
+*.tmp
+
+# Ignore any additional output from the kernel build system
+Module.symvers
+modules.order
